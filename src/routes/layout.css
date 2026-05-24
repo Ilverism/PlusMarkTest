@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 
 
+body {
+	@apply scrollbar-thin;
+	@apply scrollbar-thumb-orange-200;
+}
+
 button {
 	@apply cursor-pointer;
 	@apply disabled:cursor-not-allowed;

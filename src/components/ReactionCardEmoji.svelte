@@ -1,24 +1,41 @@
 <!-- src/components/ReactionCardEmoji.svelte -->
 <script lang="ts">
+    import type Reaction from "../Reaction.svelte";
+	import Manager from "$lib/Manager.svelte";
+
 
 	type Props = {
-		emoji: string
+		reaction: Reaction;
 	};
-	let { 
-		emoji
-	}: Props = $props();
+
+	let { reaction }: Props = $props();
+
+	const openEmojiPicker = () => {
+		Manager.openEmojiPickerForReaction(reaction);
+	};
 
 </script>
 
-<button class="reaction-card-emoji-button group">
-	<span class="reaction-card-emoji-icon">{emoji}</span>
-</button>
-
+<div class="reaction-card-emoji-picker">
+	<button
+		class="reaction-card-emoji-button group"
+		aria-label={`Change reaction emoji. Current emoji: ${reaction.emoji}`}
+		// aria-expanded={isPickerOpen}
+		aria-haspopup="dialog"
+		onclick={openEmojiPicker}
+	>
+		<span class="reaction-card-emoji-icon">{reaction.emoji}</span>
+	</button>
+</div>
 
 
 <style lang="postcss">
 	@import "tailwindcss";
 	@reference "../routes/layout.css";
+
+	.reaction-card-emoji-picker {
+		@apply relative;
+	}
 
 	.reaction-card-emoji-button {
 		@apply pb-1;
@@ -52,5 +69,6 @@
 
 		@apply group-hover:animate-wiggle;
 	}
+
 
 </style>

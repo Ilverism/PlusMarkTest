@@ -6,8 +6,10 @@
     import ReactionAddButton from "../components/ReactionAddButton.svelte";
     import { flip } from "svelte/animate";
     import TextButton from "../components/TextButton.svelte";
-	import { SiGithub, SiKofi } from "@icons-pack/svelte-simple-icons";
+	import { SiKofi } from "@icons-pack/svelte-simple-icons";
     import { ExternalLink } from "@lucide/svelte";
+    import EmojiPicker from "../components/EmojiPicker.svelte";
+    import { cubicInOut, cubicOut } from "svelte/easing";
 
 </script>
 
@@ -22,7 +24,7 @@
 		<div class="reaction-items" class:reaction-items-disabled={Manager.isGenerating}>
 
 			{#each Manager.reactions as reaction (reaction.uuid)}
-				<div animate:flip={{duration: 150}}>
+				<div animate:flip={{duration: 300, easing: cubicOut}}>
 					<ReactionCard {reaction} />
 				</div>
 			{:else}
@@ -55,11 +57,15 @@
 		</div>
 
 	</TextButton>
-	<TextButton link="https://github.com" cLass="absolute bottom-4 left-4">
+	<TextButton link="https://github.com" cLass="absolute bottom-4 left-4 hover:underline">
 		<SiKofi size={18} />
 		<span>Support (Ko-fi)</span>
 	</TextButton>
 
+	<!-- Emoji Picker -->
+	{#if Manager.reactionEmojiPickerOpen}
+		<EmojiPicker />
+	{/if}
 
 </div>
 

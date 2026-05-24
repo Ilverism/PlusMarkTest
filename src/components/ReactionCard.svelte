@@ -1,10 +1,10 @@
 <!-- src/components/ReactionCard.svelte -->
 <script lang="ts">
 	import Manager from "$lib/Manager.svelte";
-    import { fade, fly } from "svelte/transition";
+    import { fly } from "svelte/transition";
     import Reaction from "../Reaction.svelte";
     import ReactionCardEmoji from "./ReactionCardEmoji.svelte";
-    import { cubicInOut, cubicOut } from "svelte/easing";
+    import { cubicOut } from "svelte/easing";
 
 	type Props = {
 		reaction: Reaction
@@ -21,11 +21,14 @@
 
 </script>
 
-<!-- <div class="reaciton-card-body" transition:fade={{duration: 150, easing: cubicInOut}}> -->
-<div class="reaciton-card-body" in:fly={{duration: 400, easing: cubicOut, x: 400, y: 0}} out:fly={{duration: 400, easing: cubicOut, x: 400, y: 0}}>
+<div
+	class="reaciton-card-body"
+	in:fly={{duration: 400, easing: cubicOut, x: 400, y: 0}}
+	out:fly={{duration: 400, easing: cubicOut, x: 400, y: 0}}
+>
 
 	<!-- Emoji -->
-	<ReactionCardEmoji emoji={reaction.emoji} />
+	<ReactionCardEmoji reaction={reaction} />
 
 	<!-- Content -->
 	<div>

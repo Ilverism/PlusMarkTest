@@ -6,6 +6,22 @@ class Manager {
 	isGenerating: boolean = $state(false);
 	didStartGenerate: boolean = $state(false);
 	reactions: Reaction[] = $state([]);
+	reactionEmojiEditing: Reaction | null = $state(null);
+	reactionEmojiPickerOpen: boolean = $derived.by(() => {
+		
+		// No reaction being edited -> False
+		if (this.reactionEmojiEditing === null)
+			return false;
+
+		// Reactions list no longer contains the reaction being edited -> False
+		if (!this.reactions.some(r => r.uuid === this.reactionEmojiEditing?.uuid)) {
+			//this.reactionEmojiEditing = null;
+			return false;
+		}
+
+		return true;
+
+	});
 
 	output: string = $state("");
 	outputDisplayed: string = $derived.by(() => {
@@ -33,6 +49,23 @@ class Manager {
 
 		// EXAMPLE REACTIONS [EX]
 		this.reactions.push(new Reaction());
+
+	}
+
+	/**
+	 * Opens the emoji picker for a specific reaction, allowing the user to edit its emoji.
+	 * 
+	 * @param reaction - The Reaction for which to open the emoji picker
+	 */
+	openEmojiPickerForReaction(reaction: Reaction) {
+
+		// Already editing this reaction -> Close picker
+		if (this.reactionEmojiEditing?.uuid === reaction.uuid) {
+			this.reactionEmojiEditing = null;
+			return;
+		}
+
+		this.reactionEmojiEditing = reaction;
 
 	}
 

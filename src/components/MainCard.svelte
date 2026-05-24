@@ -124,7 +124,7 @@
 
 		@apply mt-4 mb-4;
 		@apply px-4 py-2;
-		@apply bg-orange-100;
+		@apply bg-orange-50;
 
 		@apply overflow-y-scroll;
 		@apply scrollbar-thin;
