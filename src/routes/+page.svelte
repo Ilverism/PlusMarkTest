@@ -1,2 +1,99 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<!-- src/routes/+page.svelte -->
+<script>
+    import ReactionCard from "../components/ReactionCard.svelte";
+	import Manager from "$lib/Manager.svelte";
+    import MainCard from "../components/MainCard.svelte";
+    import ReactionAddButton from "../components/ReactionAddButton.svelte";
+    import { flip } from "svelte/animate";
+    import TextButton from "../components/TextButton.svelte";
+	import { SiGithub, SiKofi } from "@icons-pack/svelte-simple-icons";
+    import { ExternalLink } from "@lucide/svelte";
+
+</script>
+
+<div class="page-body noto-sans w-full">
+
+	<div class="page-content">
+
+		<!-- Main Card -->
+		<MainCard />
+
+		<!-- Reaction Items -->
+		<div class="reaction-items" class:reaction-items-disabled={Manager.isGenerating}>
+
+			{#each Manager.reactions as reaction (reaction.uuid)}
+				<div animate:flip={{duration: 150}}>
+					<ReactionCard {reaction} />
+				</div>
+			{:else}
+				<p>No reactions yet!</p>
+			{/each}
+
+			<!-- Add Reaction Button -->
+			<ReactionAddButton />
+
+		</div>
+
+	</div>
+
+	<!-- Corner Buttons -->
+	<TextButton link="https://github.com" cLass="absolute top-4 left-4 flex gap-2 group hover:scale-105">
+		<!-- <SiGithub size={18} />
+		<span>GitHub</span> -->
+
+		<img src="/PlusMark-logo.svg" alt="PlusMark Logo" class="main-card-logo w-16"/>
+
+		<!-- ... -->
+		<div class="flex flex-col items-start">
+			<span class="text-base font-black group-hover:underline">PlusMark</span>
+
+			<!-- Not Hovering -> Show Version & Date -->
+			<span class="text-xs text-gray-600 font-light group-hover:hidden">ver. 2026-05.23 (Beta)</span>
+			<span class="text-xs text-gray-600 font-light not-group-hover:hidden flex gap-1 items-center">
+				<ExternalLink  size={16}/>
+				Open in GitHub</span>
+		</div>
+
+	</TextButton>
+	<TextButton link="https://github.com" cLass="absolute bottom-4 left-4">
+		<SiKofi size={18} />
+		<span>Support (Ko-fi)</span>
+	</TextButton>
+
+
+</div>
+
+
+
+<style lang="postcss">
+	@import "tailwindcss";
+
+	.page-body {
+		@apply relative;
+
+		@apply flex items-center justify-center;
+	}
+
+	.page-content {
+		@apply p-8;
+
+		@apply flex items-center gap-6;
+	}
+
+	.reaction-items {
+		@apply flex-1;
+
+		@apply flex flex-col items-center gap-4;
+
+		@apply transition-all duration-400;
+	}
+
+	.reaction-items-disabled {
+		@apply opacity-50;
+		@apply pointer-events-none;
+		@apply select-none;
+	}
+
+
+
+</style>

@@ -1,1 +1,43 @@
 @import 'tailwindcss';
+
+
+button {
+	@apply cursor-pointer;
+	@apply disabled:cursor-not-allowed;
+	@apply disabled:opacity-50;
+}
+
+
+@theme {
+	--animate-wiggle: wiggle 2s infinite;
+
+	@keyframes wiggle {
+		0% {
+			transform: rotate(10deg);
+			animation-timing-function: ease-in-out;
+		}
+		50% {
+			transform: rotate(-10deg);
+			animation-timing-function: ease-in-out;	
+		}
+		100% {
+			transform: rotate(10deg);
+		}
+	}
+
+	--animate-slide-background: slide-background 20s linear infinite;
+	@keyframes slide-background {
+		from { background-position: 100% 0; }
+		to { background-position: 0% 0; }
+	}
+}
+
+
+/* Fonts */
+.noto-sans {
+  font-family: "Noto Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-variation-settings:
+    "wdth" 100;
+}

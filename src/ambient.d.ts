@@ -1,0 +1,3 @@
+// src/ambient.d.ts
+
+// ...
