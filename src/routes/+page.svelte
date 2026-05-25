@@ -6,8 +6,7 @@
     import ReactionAddButton from "../components/ReactionAddButton.svelte";
     import { flip } from "svelte/animate";
     import TextButton from "../components/TextButton.svelte";
-	import { SiKofi } from "@icons-pack/svelte-simple-icons";
-    import { ExternalLink } from "@lucide/svelte";
+    import { Coffee, ExternalLink } from "@lucide/svelte";
     import EmojiPicker from "../components/EmojiPicker.svelte";
     import { cubicOut } from "svelte/easing";
     import LanguagePicker from "../components/LanguagePicker.svelte";
@@ -60,7 +59,7 @@
 
 	</TextButton>
 	<TextButton link="https://github.com" cLass="absolute bottom-4 left-4 hover:underline">
-		<SiKofi size={18} />
+		<Coffee size={18} />
 		<span>{__support()} (Ko-fi)</span>
 	</TextButton>
 	<LanguagePicker cLass="absolute bottom-4 right-4" />
