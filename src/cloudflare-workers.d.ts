@@ -32,6 +32,9 @@ interface DurableObjectState {
 interface DurableObjectStorage {
 	sql: SqlStorage;
 	transactionSync<T>(closure: () => T): T;
+	getAlarm(): Promise<number | null>;
+	setAlarm(scheduledTime: number | Date): Promise<void>;
+	deleteAlarm(): Promise<void>;
 }
 
 interface SqlStorage {

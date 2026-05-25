@@ -1,5 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { PublicWidget, PublicWidgetReaction, WidgetReactionInput } from '$lib/widget';
+import {
+	discoverGitHubCamoTargets,
+	purgeCamoUrl,
+	toSafeGitHubPageUrl,
+	type CamoTarget
+} from './github-camo';
 
 type SqlRow = Record<string, ArrayBuffer | string | number | null>;
 
@@ -18,6 +24,33 @@ type ReactionRow = SqlRow & {
 	description: string;
 	sort_order: number;
 	count: number | null;
+};
+
+type ReactionIdRow = SqlRow & {
+	id: string;
+};
+
+type GithubSyncStateRow = SqlRow & {
+	key: string;
+	github_url: string;
+	next_discovery_at: number;
+	last_discovery_at: number;
+	discovery_attempts: number;
+	last_discovery_status: number;
+	purge_window_started_at: number;
+	purge_window_count: number;
+	updated_at: number;
+};
+
+type CamoTargetRow = SqlRow & {
+	reaction: string;
+	canonical_url: string;
+	camo_url: string;
+	discovered_at: number;
+	purge_pending: number;
+	next_purge_at: number;
+	last_purge_attempt_at: number;
+	last_purge_status: number;
 };
 
 type SaveWidgetCommand = {
@@ -53,6 +86,22 @@ type ToggleSuccess = {
 	active: boolean;
 	returnUrl: string;
 };
+
+const GITHUB_STATE_KEY = 'default';
+const DISCOVERY_DELAYS_MS = [
+	60_000,
+	5 * 60_000,
+	30 * 60_000,
+	6 * 60 * 60_000,
+	24 * 60 * 60_000
+];
+const DISCOVERY_EXHAUSTED_RETRY_MS = 24 * 60 * 60_000;
+const PURGE_DEBOUNCE_MS = 60_000;
+const PURGE_MIN_INTERVAL_MS = 15 * 60_000;
+const PURGE_WINDOW_MS = 60 * 60_000;
+const PURGE_WINDOW_LIMIT = 8;
+const PURGE_BATCH_LIMIT = 4;
+const PURGE_BATCH_SPACING_MS = 60_000;
 
 export class ReactionDocument extends DurableObject {
 	private initialized = false;
@@ -114,6 +163,8 @@ export class ReactionDocument extends DurableObject {
 			};
 		}
 
+		await this.syncGitHubStateAfterWidgetSave();
+
 		return {
 			ok: true,
 			widget,
@@ -157,6 +208,8 @@ export class ReactionDocument extends DurableObject {
 				message: 'Unknown reaction.'
 			};
 		}
+
+		await this.maybeScheduleGitHubDiscoveryFromBadge(reactionId);
 
 		return {
 			ok: true,
@@ -236,7 +289,16 @@ export class ReactionDocument extends DurableObject {
 			} satisfies ToggleSuccess;
 		});
 
+		if (result.ok) {
+			await this.queueCamoPurge(result.returnUrl, reactionId);
+		}
+
 		return result;
+	}
+
+	async alarm(): Promise<void> {
+		this.initialize();
+		await this.runGitHubMaintenance();
 	}
 
 	private initialize() {
@@ -255,6 +317,37 @@ export class ReactionDocument extends DurableObject {
 		sql.exec(
 			'CREATE TABLE IF NOT EXISTS votes (reaction TEXT NOT NULL, voter_hash TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (reaction, voter_hash))'
 		);
+		sql.exec(
+			`CREATE TABLE IF NOT EXISTS github_sync_state (
+				key TEXT PRIMARY KEY,
+				github_url TEXT NOT NULL,
+				next_discovery_at INTEGER NOT NULL DEFAULT 0,
+				last_discovery_at INTEGER NOT NULL DEFAULT 0,
+				discovery_attempts INTEGER NOT NULL DEFAULT 0,
+				last_discovery_status INTEGER NOT NULL DEFAULT 0,
+				purge_window_started_at INTEGER NOT NULL DEFAULT 0,
+				purge_window_count INTEGER NOT NULL DEFAULT 0,
+				updated_at INTEGER NOT NULL
+			)`
+		);
+		sql.exec(
+			`CREATE TABLE IF NOT EXISTS camo_targets (
+				reaction TEXT PRIMARY KEY,
+				canonical_url TEXT NOT NULL,
+				camo_url TEXT NOT NULL,
+				discovered_at INTEGER NOT NULL,
+				purge_pending INTEGER NOT NULL DEFAULT 0,
+				next_purge_at INTEGER NOT NULL DEFAULT 0,
+				last_purge_attempt_at INTEGER NOT NULL DEFAULT 0,
+				last_purge_status INTEGER NOT NULL DEFAULT 0
+			)`
+		);
+		sql.exec(
+			`CREATE TABLE IF NOT EXISTS pending_camo_purges (
+				reaction TEXT PRIMARY KEY,
+				requested_at INTEGER NOT NULL
+			)`
+		);
 
 		this.initialized = true;
 	}
@@ -266,6 +359,8 @@ export class ReactionDocument extends DurableObject {
 		this.ctx.storage.sql.exec(`DELETE FROM reactions WHERE id NOT IN (${placeholders})`, ...ids);
 		this.ctx.storage.sql.exec(`DELETE FROM counts WHERE reaction NOT IN (${placeholders})`, ...ids);
 		this.ctx.storage.sql.exec(`DELETE FROM votes WHERE reaction NOT IN (${placeholders})`, ...ids);
+		this.ctx.storage.sql.exec(`DELETE FROM camo_targets WHERE reaction NOT IN (${placeholders})`, ...ids);
+		this.ctx.storage.sql.exec(`DELETE FROM pending_camo_purges WHERE reaction NOT IN (${placeholders})`, ...ids);
 
 		reactions.forEach((reaction, index) => {
 			this.ctx.storage.sql.exec(
@@ -287,6 +382,417 @@ export class ReactionDocument extends DurableObject {
 				reaction.id
 			);
 		});
+	}
+
+	private async syncGitHubStateAfterWidgetSave() {
+		const shouldSchedule = this.ctx.storage.transactionSync(() =>
+			this.maybeScheduleGitHubDiscoveryTransaction(Date.now(), DISCOVERY_DELAYS_MS[0], true)
+		);
+
+		if (shouldSchedule) await this.ensureAlarmScheduled();
+	}
+
+	private async maybeScheduleGitHubDiscoveryFromBadge(reactionId: string) {
+		const shouldSchedule = this.ctx.storage.transactionSync(() => {
+			if (this.getCamoTarget(reactionId)) return false;
+			return this.maybeScheduleGitHubDiscoveryTransaction(Date.now(), DISCOVERY_DELAYS_MS[0], false);
+		});
+
+		if (shouldSchedule) await this.ensureAlarmScheduled();
+	}
+
+	private async queueCamoPurge(returnUrl: string, reactionId: string) {
+		if (!toSafeGitHubPageUrl(returnUrl)) return;
+
+		const shouldSchedule = this.ctx.storage.transactionSync(() => {
+			const now = Date.now();
+			const target = this.getCamoTarget(reactionId);
+
+			if (!target) {
+				this.ctx.storage.sql.exec(
+					`INSERT INTO pending_camo_purges (reaction, requested_at)
+						VALUES (?, ?)
+						ON CONFLICT(reaction) DO UPDATE SET requested_at = excluded.requested_at`,
+					reactionId,
+					now
+				);
+				return this.maybeScheduleGitHubDiscoveryTransaction(now, DISCOVERY_DELAYS_MS[0], false);
+			}
+
+			const earliest = Math.max(
+				now + PURGE_DEBOUNCE_MS,
+				Number(target.last_purge_attempt_at || 0) + PURGE_MIN_INTERVAL_MS
+			);
+			const nextPurgeAt = target.purge_pending && target.next_purge_at
+				? Math.min(Number(target.next_purge_at), earliest)
+				: earliest;
+
+			this.ctx.storage.sql.exec(
+				`UPDATE camo_targets
+					SET purge_pending = 1, next_purge_at = ?
+					WHERE reaction = ?`,
+				nextPurgeAt,
+				reactionId
+			);
+
+			return true;
+		});
+
+		if (shouldSchedule) await this.ensureAlarmScheduled();
+	}
+
+	private maybeScheduleGitHubDiscoveryTransaction(
+		now: number,
+		delayMs: number,
+		resetAttempts: boolean
+	): boolean {
+		const widget = this.getWidgetRow();
+		if (!widget) return false;
+
+		const githubUrl = toSafeGitHubPageUrl(widget.return_url);
+		if (!githubUrl) {
+			this.clearGithubSyncState();
+			return false;
+		}
+
+		let state = this.getGithubState();
+		let attempts = Number(state?.discovery_attempts ?? 0);
+		let targetCount = this.countCamoTargets();
+		const reactionCount = this.countReactions();
+
+		if (reactionCount === 0) return false;
+
+		if (!state || state.github_url !== githubUrl) {
+			this.ctx.storage.sql.exec('DELETE FROM camo_targets');
+			this.ctx.storage.sql.exec('DELETE FROM pending_camo_purges');
+			state = null;
+			attempts = 0;
+			targetCount = 0;
+		}
+
+		if (targetCount >= reactionCount) return false;
+
+		if (
+			state &&
+			!resetAttempts &&
+			attempts >= DISCOVERY_DELAYS_MS.length &&
+			now - Number(state.last_discovery_at || 0) < DISCOVERY_EXHAUSTED_RETRY_MS
+		) {
+			return false;
+		}
+
+		if (resetAttempts || attempts >= DISCOVERY_DELAYS_MS.length) attempts = 0;
+
+		const nextDiscoveryAt = now + delayMs;
+		if (state && !resetAttempts && state.next_discovery_at > 0 && state.next_discovery_at <= nextDiscoveryAt) {
+			return true;
+		}
+
+		this.ctx.storage.sql.exec(
+			`INSERT INTO github_sync_state (
+				key,
+				github_url,
+				next_discovery_at,
+				last_discovery_at,
+				discovery_attempts,
+				last_discovery_status,
+				purge_window_started_at,
+				purge_window_count,
+				updated_at
+			)
+				VALUES (?, ?, ?, 0, ?, 0, 0, 0, ?)
+				ON CONFLICT(key) DO UPDATE SET
+					github_url = excluded.github_url,
+					next_discovery_at = excluded.next_discovery_at,
+					discovery_attempts = excluded.discovery_attempts,
+					updated_at = excluded.updated_at`,
+			GITHUB_STATE_KEY,
+			githubUrl,
+			nextDiscoveryAt,
+			attempts,
+			now
+		);
+
+		return true;
+	}
+
+	private async runGitHubMaintenance() {
+		await this.runGitHubDiscoveryIfDue(Date.now());
+		await this.runCamoPurgeBatch(Date.now());
+		await this.ensureAlarmScheduled();
+	}
+
+	private async runGitHubDiscoveryIfDue(now: number) {
+		const state = this.getGithubState();
+		if (!state || state.next_discovery_at <= 0 || state.next_discovery_at > now) return;
+
+		const widget = this.getWidgetRow();
+		if (!widget) {
+			this.clearGithubSyncState();
+			return;
+		}
+
+		const githubUrl = toSafeGitHubPageUrl(widget.return_url);
+		if (!githubUrl || githubUrl !== state.github_url) {
+			this.clearGithubSyncState();
+			return;
+		}
+
+		const reactionIds = this.readReactionIds();
+		const attemptNumber = Number(state.discovery_attempts) + 1;
+
+		this.ctx.storage.sql.exec(
+			`UPDATE github_sync_state
+				SET next_discovery_at = 0,
+					last_discovery_at = ?,
+					discovery_attempts = ?,
+					updated_at = ?
+				WHERE key = ?`,
+			now,
+			attemptNumber,
+			now,
+			GITHUB_STATE_KEY
+		);
+
+		const result = await discoverGitHubCamoTargets(githubUrl, widget.doc, reactionIds);
+		const completedAt = Date.now();
+
+		this.ctx.storage.transactionSync(() => {
+			const currentState = this.getGithubState();
+			if (!currentState || currentState.github_url !== githubUrl) return;
+
+			this.storeCamoTargets(result.targets, completedAt);
+
+			const targetCount = this.countCamoTargets();
+			const reactionCount = this.countReactions();
+			const nextDelay = DISCOVERY_DELAYS_MS[attemptNumber] ?? 0;
+			const nextDiscoveryAt = targetCount < reactionCount && nextDelay > 0
+				? completedAt + nextDelay
+				: 0;
+
+			this.ctx.storage.sql.exec(
+				`UPDATE github_sync_state
+					SET next_discovery_at = ?,
+						last_discovery_status = ?,
+						updated_at = ?
+					WHERE key = ?`,
+				nextDiscoveryAt,
+				result.status,
+				completedAt,
+				GITHUB_STATE_KEY
+			);
+		});
+	}
+
+	private storeCamoTargets(targets: CamoTarget[], now: number) {
+		for (const target of targets) {
+			const pendingPurge = this.ctx.storage.sql
+				.exec('SELECT reaction FROM pending_camo_purges WHERE reaction = ? LIMIT 1', target.reaction)
+				.toArray()[0];
+			const nextPurgeAt = pendingPurge ? now + PURGE_DEBOUNCE_MS : 0;
+
+			this.ctx.storage.sql.exec(
+				`INSERT INTO camo_targets (
+					reaction,
+					canonical_url,
+					camo_url,
+					discovered_at,
+					purge_pending,
+					next_purge_at,
+					last_purge_attempt_at,
+					last_purge_status
+				)
+					VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+					ON CONFLICT(reaction) DO UPDATE SET
+						canonical_url = excluded.canonical_url,
+						camo_url = excluded.camo_url,
+						discovered_at = excluded.discovered_at,
+						purge_pending = CASE
+							WHEN excluded.purge_pending = 1 THEN 1
+							ELSE camo_targets.purge_pending
+						END,
+						next_purge_at = CASE
+							WHEN excluded.next_purge_at > 0 THEN excluded.next_purge_at
+							ELSE camo_targets.next_purge_at
+						END`,
+				target.reaction,
+				target.canonicalUrl,
+				target.camoUrl,
+				now,
+				pendingPurge ? 1 : 0,
+				nextPurgeAt
+			);
+
+			if (pendingPurge) {
+				this.ctx.storage.sql.exec(
+					'DELETE FROM pending_camo_purges WHERE reaction = ?',
+					target.reaction
+				);
+			}
+		}
+	}
+
+	private async runCamoPurgeBatch(now: number) {
+		const dueTargets = this.ctx.storage.sql
+			.exec<CamoTargetRow>(
+				`SELECT *
+					FROM camo_targets
+					WHERE purge_pending = 1 AND next_purge_at > 0 AND next_purge_at <= ?
+					ORDER BY next_purge_at ASC
+					LIMIT ${PURGE_BATCH_LIMIT}`,
+				now
+			)
+			.toArray();
+
+		if (dueTargets.length === 0) return;
+
+		const slots = this.reservePurgeSlots(now, dueTargets.length);
+		if (slots <= 0) return;
+
+		const batch = dueTargets.slice(0, slots);
+		const postponed = dueTargets.slice(slots);
+
+		for (const target of postponed) {
+			this.ctx.storage.sql.exec(
+				'UPDATE camo_targets SET next_purge_at = ? WHERE reaction = ?',
+				now + PURGE_BATCH_SPACING_MS,
+				target.reaction
+			);
+		}
+
+		for (const target of batch) {
+			const status = await purgeCamoUrl(target.camo_url);
+			const completedAt = Date.now();
+
+			this.ctx.storage.sql.exec(
+				`UPDATE camo_targets
+					SET purge_pending = 0,
+						next_purge_at = 0,
+						last_purge_attempt_at = ?,
+						last_purge_status = ?
+					WHERE reaction = ?`,
+				completedAt,
+				status,
+				target.reaction
+			);
+		}
+	}
+
+	private reservePurgeSlots(now: number, requested: number): number {
+		const state = this.getGithubState();
+		if (!state) return 0;
+
+		let windowStartedAt = Number(state.purge_window_started_at || 0);
+		let windowCount = Number(state.purge_window_count || 0);
+
+		if (!windowStartedAt || now - windowStartedAt >= PURGE_WINDOW_MS) {
+			windowStartedAt = now;
+			windowCount = 0;
+		}
+
+		const remaining = Math.max(0, PURGE_WINDOW_LIMIT - windowCount);
+		const slots = Math.min(requested, PURGE_BATCH_LIMIT, remaining);
+
+		if (slots === 0) {
+			const nextWindowAt = windowStartedAt + PURGE_WINDOW_MS;
+			this.ctx.storage.sql.exec(
+				`UPDATE camo_targets
+					SET next_purge_at = ?
+					WHERE purge_pending = 1 AND next_purge_at > 0 AND next_purge_at <= ?`,
+				nextWindowAt,
+				now
+			);
+		}
+
+		this.ctx.storage.sql.exec(
+			`UPDATE github_sync_state
+				SET purge_window_started_at = ?,
+					purge_window_count = ?,
+					updated_at = ?
+				WHERE key = ?`,
+			windowStartedAt,
+			windowCount + slots,
+			now,
+			GITHUB_STATE_KEY
+		);
+
+		return slots;
+	}
+
+	private async ensureAlarmScheduled() {
+		const nextAlarmAt = this.getNextAlarmTime();
+		const currentAlarm = await this.ctx.storage.getAlarm();
+
+		if (!nextAlarmAt) {
+			if (currentAlarm) await this.ctx.storage.deleteAlarm();
+			return;
+		}
+
+		if (!currentAlarm || currentAlarm > nextAlarmAt + 1_000 || currentAlarm < Date.now()) {
+			await this.ctx.storage.setAlarm(nextAlarmAt);
+		}
+	}
+
+	private getNextAlarmTime(): number | null {
+		const state = this.getGithubState();
+		const times: number[] = [];
+
+		if (state?.next_discovery_at && state.next_discovery_at > 0) {
+			times.push(Number(state.next_discovery_at));
+		}
+
+		const nextPurge = this.ctx.storage.sql
+			.exec<{ next_at: number | null }>(
+				`SELECT MIN(next_purge_at) AS next_at
+					FROM camo_targets
+					WHERE purge_pending = 1 AND next_purge_at > 0`
+			)
+			.toArray()[0]?.next_at;
+
+		if (nextPurge) times.push(Number(nextPurge));
+
+		return times.length ? Math.min(...times) : null;
+	}
+
+	private getGithubState(): GithubSyncStateRow | null {
+		return this.ctx.storage.sql
+			.exec<GithubSyncStateRow>('SELECT * FROM github_sync_state WHERE key = ? LIMIT 1', GITHUB_STATE_KEY)
+			.toArray()[0] ?? null;
+	}
+
+	private getCamoTarget(reactionId: string): CamoTargetRow | null {
+		return this.ctx.storage.sql
+			.exec<CamoTargetRow>('SELECT * FROM camo_targets WHERE reaction = ? LIMIT 1', reactionId)
+			.toArray()[0] ?? null;
+	}
+
+	private clearGithubSyncState() {
+		this.ctx.storage.sql.exec('DELETE FROM github_sync_state');
+		this.ctx.storage.sql.exec('DELETE FROM camo_targets');
+		this.ctx.storage.sql.exec('DELETE FROM pending_camo_purges');
+	}
+
+	private countReactions(): number {
+		return Number(
+			this.ctx.storage.sql
+				.exec<{ value: number }>('SELECT COUNT(*) AS value FROM reactions')
+				.toArray()[0]?.value ?? 0
+		);
+	}
+
+	private countCamoTargets(): number {
+		return Number(
+			this.ctx.storage.sql
+				.exec<{ value: number }>('SELECT COUNT(*) AS value FROM camo_targets')
+				.toArray()[0]?.value ?? 0
+		);
+	}
+
+	private readReactionIds(): string[] {
+		return this.ctx.storage.sql
+			.exec<ReactionIdRow>('SELECT id FROM reactions ORDER BY sort_order ASC')
+			.toArray()
+			.map((row) => row.id);
 	}
 
 	private getWidgetRow(): WidgetRow | null {
