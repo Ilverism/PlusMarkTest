@@ -1,4 +1,20 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-	"hello_world": "Hello, {name} from es!"
+	"hello_world": "Hello, {name} from es!",
+
+	"__tagline": "¡La forma más sencilla de agregar botones de <b>reacción en línea</b> a tu contenido Markdown!",
+
+	"__instructions_header": "Instrucciones",
+	"__instructions_step_1": "Agrega tus reacciones y selecciona sus íconos",
+	"__instructions_step_2": "<b>Genera</b> el código HTML embebible",
+	"__instructions_step_3": "<b>Copiar y pegar</b> el código generado en tu contenido Markdown",
+
+	"__reaction_name_placeholder": "Nombre",
+	"__reaction_description_placeholder": "Descripción (opcional)",
+
+	"__add_reaction_button": "Agregar Reacción",
+
+	"__generate_HTML_button": "Generar <i>HTML</i>",
+
+	"__support": "Soporte"
 }

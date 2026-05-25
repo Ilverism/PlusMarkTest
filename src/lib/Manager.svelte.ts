@@ -1,12 +1,22 @@
 // src/lib/Manager.ts
 import Reaction from "../Reaction.svelte";
 
+export type EmojiPickerAnchorRect = {
+	top: number;
+	right: number;
+	bottom: number;
+	left: number;
+	width: number;
+	height: number;
+};
+
 class Manager {
 
 	isGenerating: boolean = $state(false);
 	didStartGenerate: boolean = $state(false);
 	reactions: Reaction[] = $state([]);
 	reactionEmojiEditing: Reaction | null = $state(null);
+	reactionEmojiPickerPosition: EmojiPickerAnchorRect | null = $state(null);
 	reactionEmojiPickerOpen: boolean = $derived.by(() => {
 		
 		// No reaction being edited -> False
@@ -56,8 +66,9 @@ class Manager {
 	 * Opens the emoji picker for a specific reaction, allowing the user to edit its emoji.
 	 * 
 	 * @param reaction - The Reaction for which to open the emoji picker
+	 * @param buttonRect - The bounding rectangle of the emoji button, used for positioning the picker
 	 */
-	openEmojiPickerForReaction(reaction: Reaction) {
+	openEmojiPickerForReaction(reaction: Reaction, buttonRect: DOMRect) {
 
 		// Already editing this reaction -> Close picker
 		if (this.reactionEmojiEditing?.uuid === reaction.uuid) {
@@ -66,7 +77,23 @@ class Manager {
 		}
 
 		this.reactionEmojiEditing = reaction;
+		this.reactionEmojiPickerPosition = {
+			top: buttonRect.top,
+			right: buttonRect.right,
+			bottom: buttonRect.bottom,
+			left: buttonRect.left,
+			width: buttonRect.width,
+			height: buttonRect.height
+		};
 
+	}
+
+	/**
+	 * Closes the emoji picker and clears the editing state.
+	 */
+	closeEmojiPicker() {
+		this.reactionEmojiEditing = null;
+		this.reactionEmojiPickerPosition = null;
 	}
 
 	/**

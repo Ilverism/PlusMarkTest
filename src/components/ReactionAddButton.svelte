@@ -1,11 +1,11 @@
 <!-- src/components/ReactionAddButton.svelte -->
 <script lang="ts">
 	import Manager from "$lib/Manager.svelte";
-    import { slide } from "svelte/transition";
+    import { __add_reaction_button } from "$lib/paraglide/messages";
 </script>
 
-<button class="reaction-add-button" onclick={() => Manager.addReaction()} transition:slide|global={{duration: 10000}}>
-	<div>＋ Add Reaction</div>
+<button class="reaction-add-button" onclick={() => Manager.addReaction()}>
+	<div>＋ {__add_reaction_button()}</div>
 </button>
 
 

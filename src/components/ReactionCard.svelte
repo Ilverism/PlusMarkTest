@@ -5,6 +5,7 @@
     import Reaction from "../Reaction.svelte";
     import ReactionCardEmoji from "./ReactionCardEmoji.svelte";
     import { cubicOut } from "svelte/easing";
+    import { __reaction_description_placeholder, __reaction_name_placeholder } from "$lib/paraglide/messages";
 
 	type Props = {
 		reaction: Reaction
@@ -32,8 +33,8 @@
 
 	<!-- Content -->
 	<div>
-		<input class="text-xl font-semibold mb-2" bind:value={reaction.name} placeholder="Name" />
-		<input class="text-gray-600" bind:value={reaction.description} placeholder="Description (optional)" />
+		<input class="text-xl font-semibold mb-2" bind:value={reaction.name} placeholder={__reaction_name_placeholder()} />
+		<input class="text-gray-600" bind:value={reaction.description} placeholder={__reaction_description_placeholder()} />
 	</div>
 
 	<!-- Remove Button -->

@@ -2,30 +2,29 @@
 <script lang="ts">
 
 	import Manager from "$lib/Manager.svelte";
+    import { __generate_HTML_button, __tagline, __instructions_header, __instructions_step_1, __instructions_step_2, __instructions_step_3 } from "$lib/paraglide/messages";
+    import { CirclePlay } from "@lucide/svelte";
     import { backIn, backOut } from "svelte/easing";
     import { scale, slide } from "svelte/transition";
 
 </script>
 
 <div class="main-card">
-    <h2 class="ml-4">PlusMark</h2>
 
+	<!-- Header & Tagline -->
+    <h2 class="ml-4">PlusMark</h2>
 	<p class="text-gray-600 mt-4 px-4">
-		The simplest way to add <b>inline reaction</b> buttons to your Markdown content!
+		{@html __tagline()}
 	</p>
 
+	<!-- Instructions -->
 	<hr class="border-orange-200 border-2 drop-shadow-xs drop-shadow-black/30 mt-4"/>
-
-	<h3 class="ml-4 underline mt-4">Instructions</h3>
+	<h3 class="ml-4 underline mt-4">{__instructions_header()}</h3>
 	<ol class="mt-4 list-decimal list-inside">
-		<li>Add your reactions and select their icons</li>
-		<li>Generate the embeddable HTML code</li>
-		<li>Paste the code into your Markdown content</li>
+		<li>{@html __instructions_step_1()}</li>
+		<li>{@html __instructions_step_2()}</li>
+		<li>{@html __instructions_step_3()}</li>
 	</ol>
-
-
-	<!-- Logo -->
-	<!-- <img src="/PlusMark-logo.svg" alt="PlusMark Logo" class="main-card-logo"/>	 -->
 
 	<!-- Generated HTML -->
 	{#if Manager.didStartGenerate}
@@ -52,7 +51,8 @@
 			in:scale={{duration: 400, easing: backOut }}
 			out:scale={{duration: 400, easing: backIn }}
 		>
-			Generate HTML
+			<CirclePlay />
+			{@html __generate_HTML_button()}
 		</button>
 	{/if}
 
@@ -95,7 +95,7 @@
 		@apply bg-white;
 		@apply rounded-full;
 		
-		@apply flex items-center justify-center;
+		@apply flex items-center justify-center gap-2;
 		
 		@apply hover:bg-sky-600;
 		@apply hover:text-white;

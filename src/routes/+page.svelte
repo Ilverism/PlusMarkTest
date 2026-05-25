@@ -10,6 +10,8 @@
     import { ExternalLink } from "@lucide/svelte";
     import EmojiPicker from "../components/EmojiPicker.svelte";
     import { cubicInOut, cubicOut } from "svelte/easing";
+    import LanguagePicker from "../components/LanguagePicker.svelte";
+    import { __support } from "$lib/paraglide/messages";
 
 </script>
 
@@ -59,8 +61,9 @@
 	</TextButton>
 	<TextButton link="https://github.com" cLass="absolute bottom-4 left-4 hover:underline">
 		<SiKofi size={18} />
-		<span>Support (Ko-fi)</span>
+		<span>{__support()} (Ko-fi)</span>
 	</TextButton>
+	<LanguagePicker cLass="absolute bottom-4 right-4" />
 
 	<!-- Emoji Picker -->
 	{#if Manager.reactionEmojiPickerOpen}

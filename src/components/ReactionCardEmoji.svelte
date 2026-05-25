@@ -10,8 +10,13 @@
 
 	let { reaction }: Props = $props();
 
-	const openEmojiPicker = () => {
-		Manager.openEmojiPickerForReaction(reaction);
+	const openEmojiPicker = (event: MouseEvent) => {
+		const emojiButton = event.currentTarget as HTMLButtonElement;
+
+		Manager.openEmojiPickerForReaction(
+			reaction,
+			emojiButton.getBoundingClientRect()
+		);
 	};
 
 </script>
@@ -20,9 +25,12 @@
 	<button
 		class="reaction-card-emoji-button group"
 		aria-label={`Change reaction emoji. Current emoji: ${reaction.emoji}`}
-		// aria-expanded={isPickerOpen}
 		aria-haspopup="dialog"
-		onclick={openEmojiPicker}
+		// onclick={openEmojiPicker}
+		onclick={(event) => {
+			event.stopPropagation();
+			Manager.openEmojiPickerForReaction(reaction, event.currentTarget.getBoundingClientRect());
+		}}
 	>
 		<span class="reaction-card-emoji-icon">{reaction.emoji}</span>
 	</button>
@@ -54,7 +62,6 @@
 	}
 
 	.reaction-card-emoji-icon {
-
 		@apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2;
 
 		@apply text-4xl;
@@ -68,6 +75,9 @@
 		@apply transition-all duration-300;
 
 		@apply group-hover:animate-wiggle;
+
+		transform-origin: center;
+		will-change: scale, rotate, padding-bottom;
 	}
 
 

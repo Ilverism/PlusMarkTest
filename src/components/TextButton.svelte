@@ -9,7 +9,7 @@
 		children: Snippet
 		cLass?: string
 	};
-	let { link, onclick, children, cLass }: Props = $props();
+	let { link, onclick = ()=>{}, children, cLass }: Props = $props();
 
 </script>
 
