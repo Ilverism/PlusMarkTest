@@ -3,13 +3,29 @@
 	"name": "plusmark",
 	"compatibility_date": "2026-05-23",
 	"compatibility_flags": [
-		"nodejs_als"
+		"nodejs_compat"
 	],
-	"main": ".svelte-kit/cloudflare/_worker.js",
+	"main": "build/cloudflare/_worker.js",
 	"assets": {
 		"binding": "ASSETS",
-		"directory": ".svelte-kit/cloudflare"
+		"directory": "build/cloudflare"
 	},
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "REACTION_DOCUMENTS",
+				"class_name": "ReactionDocument"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1_reaction_document",
+			"new_sqlite_classes": [
+				"ReactionDocument"
+			]
+		}
+	],
 	"workers_dev": true,
 	"preview_urls": true
 }

@@ -2,12 +2,12 @@
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"hello_world": "Hello, {name} from en!",
 
-	"__tagline": "The simplest way to add <b>inline reaction</b> buttons to your Markdown content!",
+	"__tagline": "The simplest way to add inline reaction buttons to your Markdown content!",
 
 	"__instructions_header": "Instructions",
 	"__instructions_step_1": "Add your reactions and select their icons",
-	"__instructions_step_2": "<b>Generate</b> the embeddable HTML code",
-	"__instructions_step_3": "<b>Copy and paste</b> the generated code into your Markdown content",
+	"__instructions_step_2": "Generate the embeddable Markdown code",
+	"__instructions_step_3": "Copy and paste the generated code into your Markdown content",
 
 	"__reaction_name_placeholder": "Name",
 	"__reaction_description_placeholder": "Description (optional)",

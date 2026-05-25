@@ -14,17 +14,39 @@
 	<!-- Header & Tagline -->
     <h2 class="ml-4">PlusMark</h2>
 	<p class="text-gray-600 mt-4 px-4">
-		{@html __tagline()}
+		{__tagline()}
 	</p>
 
 	<!-- Instructions -->
 	<hr class="border-orange-200 border-2 drop-shadow-xs drop-shadow-black/30 mt-4"/>
 	<h3 class="ml-4 underline mt-4">{__instructions_header()}</h3>
 	<ol class="mt-4 list-decimal list-inside">
-		<li>{@html __instructions_step_1()}</li>
-		<li>{@html __instructions_step_2()}</li>
-		<li>{@html __instructions_step_3()}</li>
+		<li>{__instructions_step_1()}</li>
+		<li>{__instructions_step_2()}</li>
+		<li>{__instructions_step_3()}</li>
 	</ol>
+
+	<div class="main-card-fields">
+		<label>
+			<span>Return URL</span>
+			<input
+				type="url"
+				bind:value={Manager.returnUrl}
+				oninput={(event) => Manager.setReturnUrl(event.currentTarget.value)}
+				placeholder="https://example.com/my-markdown-document"
+			/>
+		</label>
+
+		<label>
+			<span>Content ID</span>
+			<input
+				type="text"
+				bind:value={Manager.contentId}
+				oninput={(event) => Manager.setContentId(event.currentTarget.value)}
+				placeholder="my-markdown-document"
+			/>
+		</label>
+	</div>
 
 	<!-- Generated HTML -->
 	{#if Manager.didStartGenerate}
@@ -47,12 +69,12 @@
 	{#if !Manager.didStartGenerate}
 		<button
 			class="main-card-generate-button"
-			onclick={() => Manager.generateStart()}
+			onclick={() => void Manager.generateStart()}
 			in:scale={{duration: 400, easing: backOut }}
 			out:scale={{duration: 400, easing: backIn }}
 		>
 			<CirclePlay />
-			{@html __generate_HTML_button()}
+			{__generate_HTML_button()}
 		</button>
 	{/if}
 
@@ -115,6 +137,25 @@
 	.main-card-generated-container {
 		@apply mt-4;
 		@apply overflow-hidden;
+	}
+
+	.main-card-fields {
+		@apply mt-4;
+		@apply flex flex-col gap-3;
+	}
+
+	.main-card-fields label {
+		@apply flex flex-col gap-1;
+		@apply font-semibold;
+	}
+
+	.main-card-fields input {
+		@apply bg-orange-50;
+		@apply ring-2 ring-orange-200;
+		@apply px-2 py-1;
+		@apply rounded-md;
+		@apply w-full;
+		@apply drop-shadow-sm;
 	}
 
 	.main-card-generated {

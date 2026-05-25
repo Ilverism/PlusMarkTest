@@ -10,15 +10,6 @@
 
 	let { reaction }: Props = $props();
 
-	const openEmojiPicker = (event: MouseEvent) => {
-		const emojiButton = event.currentTarget as HTMLButtonElement;
-
-		Manager.openEmojiPickerForReaction(
-			reaction,
-			emojiButton.getBoundingClientRect()
-		);
-	};
-
 </script>
 
 <div class="reaction-card-emoji-picker">
@@ -26,7 +17,6 @@
 		class="reaction-card-emoji-button group"
 		aria-label={`Change reaction emoji. Current emoji: ${reaction.emoji}`}
 		aria-haspopup="dialog"
-		// onclick={openEmojiPicker}
 		onclick={(event) => {
 			event.stopPropagation();
 			Manager.openEmojiPickerForReaction(reaction, event.currentTarget.getBoundingClientRect());

@@ -16,6 +16,7 @@
 
 <!-- Got link, use anchor tag -->
 {#if link}
+	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a class="text-button {cLass}" href={link} target="_blank" rel="noopener noreferrer">
 		{@render children?.()}
 	</a>

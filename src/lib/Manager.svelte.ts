@@ -1,5 +1,6 @@
 // src/lib/Manager.ts
 import Reaction from "../Reaction.svelte";
+import { buildMarkdownSnippet, createWidgetInput, slugifyContentId } from "$lib/widget";
 
 export type EmojiPickerAnchorRect = {
 	top: number;
@@ -14,6 +15,9 @@ class Manager {
 
 	isGenerating: boolean = $state(false);
 	didStartGenerate: boolean = $state(false);
+	contentId: string = $state("");
+	returnUrl: string = $state("");
+	error: string = $state("");
 	reactions: Reaction[] = $state([]);
 	reactionEmojiEditing: Reaction | null = $state(null);
 	reactionEmojiPickerPosition: EmojiPickerAnchorRect | null = $state(null);
@@ -39,24 +43,14 @@ class Manager {
 		if (this.output.length > 0)
 			return this.output;
 
+		if (this.error.length > 0)
+			return this.error;
+
 		return "Generation failed or is taking longer than expected...";
 
 	});
 
 	constructor() {
-
-		// Reset 'didStartGenerate' flag when reactions update
-		$effect.root(() => {
-			$effect(() => {
-				this.reactions.forEach(r => r.name || r.emoji || r.description); // Track changes to reactions
-				this.didStartGenerate = false;
-			});
-
-			return () => {
-				// cleanup
-			};
-		});
-
 		// EXAMPLE REACTIONS [EX]
 		this.reactions.push(new Reaction());
 
@@ -106,6 +100,7 @@ class Manager {
 		const newReaction = new Reaction();
 
 		this.reactions.push(newReaction);
+		this.markDirty();
 
 		console.log(`Added new reaction: ${newReaction.name}`);
 
@@ -126,6 +121,7 @@ class Manager {
 			return false;
 
 		this.reactions.splice(index, 1);
+		this.markDirty();
 		return true;
 		
 	}
@@ -135,23 +131,96 @@ class Manager {
 	 * 
 	 * @return The generated HTML code as a string
 	 */
-	generateStart(): string {
+	setReturnUrl(value: string) {
+		this.returnUrl = value;
+		this.markDirty();
+
+		if (this.contentId.trim().length === 0)
+			this.contentId = slugifyContentId(value);
+	}
+
+	setContentId(value: string) {
+		this.contentId = value;
+		this.markDirty();
+	}
+
+	markDirty() {
+		this.didStartGenerate = false;
+		this.output = "";
+		this.error = "";
+	}
+
+	/**
+	 * Begins the Markdown generation process for the current reactions.
+	 */
+	async generateStart(): Promise<string> {
 
 		// Flag as having started generation
 		this.didStartGenerate = true;
 
 		// Flag as generating
 		this.isGenerating = true;
+		this.output = "";
+		this.error = "";
 
-		// Generate HTML code for each reaction
-		// ...
+		const widgetInput = createWidgetInput({
+			doc: this.contentId,
+			returnUrl: this.returnUrl,
+			reactions: this.reactions.map((reaction) => ({
+				emoji: reaction.emoji,
+				name: reaction.name,
+				description: reaction.description
+			}))
+		});
 
-		// For now, automatically finish generation after a short delay (simulate async process)
-		setTimeout(() => {
+		if (!widgetInput) {
+			this.error = "Enter a valid return URL and at least one reaction.";
 			this.generateFinish();
-		}, 2000);
+			return "";
+		}
 
-		return "";
+		this.contentId = widgetInput.doc;
+		this.returnUrl = widgetInput.returnUrl;
+
+		const editTokenStorageKey = `plusmark:edit-token:${widgetInput.doc}`;
+		const editToken = localStorage.getItem(editTokenStorageKey);
+
+		try {
+			const response = await fetch("/api/widgets", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					...widgetInput,
+					editToken
+				})
+			});
+
+			const body = await response.json() as {
+				widget?: typeof widgetInput;
+				editToken?: string;
+				error?: string;
+			};
+
+			if (!response.ok || !body.widget) {
+				this.error = body.error ?? "Generation failed.";
+				return "";
+			}
+
+			if (body.editToken) {
+				localStorage.setItem(editTokenStorageKey, body.editToken);
+			}
+
+			this.output = buildMarkdownSnippet(body.widget, window.location.origin);
+			return this.output;
+		} catch {
+			this.error = "Generation failed. Check that the Worker preview server is running.";
+			return "";
+		} finally {
+			this.generateFinish();
+		}
+
 
 	}
 

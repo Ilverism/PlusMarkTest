@@ -27,7 +27,7 @@
 
 <select id="language-picker" class="language-picker {cLass}" onchange={setNewLocale} value={getLocale()}>
 	
-	{#each locales as locale}
+	{#each locales as locale (locale)}
 		<option value={locale}>
 			<Languages size={24} class="bg-red-500 w-16 aspect-square"/>
 			{locale}

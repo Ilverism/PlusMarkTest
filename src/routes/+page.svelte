@@ -9,7 +9,7 @@
 	import { SiKofi } from "@icons-pack/svelte-simple-icons";
     import { ExternalLink } from "@lucide/svelte";
     import EmojiPicker from "../components/EmojiPicker.svelte";
-    import { cubicInOut, cubicOut } from "svelte/easing";
+    import { cubicOut } from "svelte/easing";
     import LanguagePicker from "../components/LanguagePicker.svelte";
     import { __support } from "$lib/paraglide/messages";
 

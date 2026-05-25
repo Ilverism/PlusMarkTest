@@ -33,8 +33,18 @@
 
 	<!-- Content -->
 	<div>
-		<input class="text-xl font-semibold mb-2" bind:value={reaction.name} placeholder={__reaction_name_placeholder()} />
-		<input class="text-gray-600" bind:value={reaction.description} placeholder={__reaction_description_placeholder()} />
+		<input
+			class="text-xl font-semibold mb-2"
+			bind:value={reaction.name}
+			oninput={() => Manager.markDirty()}
+			placeholder={__reaction_name_placeholder()}
+		/>
+		<input
+			class="text-gray-600"
+			bind:value={reaction.description}
+			oninput={() => Manager.markDirty()}
+			placeholder={__reaction_description_placeholder()}
+		/>
 	</div>
 
 	<!-- Remove Button -->

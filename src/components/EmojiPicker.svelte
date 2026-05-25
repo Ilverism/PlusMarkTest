@@ -5,7 +5,7 @@
 	import Manager from "$lib/Manager.svelte";
     import { fade, scale } from "svelte/transition";
     import { cubicInOut, cubicOut } from "svelte/easing";
-    import { BadgeQuestionMark, Loader, LoaderCircle, Triangle } from "@lucide/svelte";
+    import { BadgeQuestionMark, LoaderCircle, Triangle } from "@lucide/svelte";
 
 	let search = $state("");
 	let categories = $state<EmojiCategory[]>([]);
@@ -63,6 +63,7 @@
 	const selectEmoji = (selectedEmoji: string) => {
 
 		Manager.reactionEmojiEditing!.emoji = selectedEmoji;
+		Manager.markDirty();
 		search = "";
 		
 	};
@@ -123,7 +124,7 @@
 		};
 
 		const targetElement = document.getElementById('emoji-picker-container');
-		document.addEventListener('click', (event) => {
+		document.addEventListener('click', () => {
 
 			// Target element not found
 			if (!targetElement)
@@ -198,7 +199,7 @@
 						<LoaderCircle size={64} strokeWidth={4}  />
 					</div>
 				{:else}
-					{#each visibleEmojis as entry, index (entry.emoji)}
+					{#each visibleEmojis as entry (entry.emoji)}
 						<button
 							class="reaction-card-emoji-option group"
 							aria-label={entry.name}
@@ -210,9 +211,7 @@
 							</div>
 						</button>
 
-					<!-- No Emoji Found Message -->
 					{:else}
-						<!-- <p class="reaction-card-emoji-empty">No emoji found.</p> -->
 						<div transition:fade={{duration: 400, easing: cubicInOut}} class="animate-pulse text-orange-200 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
 							<BadgeQuestionMark size={64} strokeWidth={2}  />
 						</div>
@@ -226,14 +225,14 @@
 			{/if}
 
 			<!-- Down arrow icon (Fill Illusion) -->
-			<Triangle fill={"var(--color-orange-300)"} class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 text-orange-300 rotate-180" size={24} strokeWidth={4} />
+			<Triangle fill="var(--color-orange-300)" class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 text-orange-300 rotate-180" size={24} strokeWidth={4} />
 			
 
 
 		</div>
 		
 		<!-- Down arrow icon (Bottom Stroke) -->
-		<Triangle fill={"var(--color-orange-300)"} class="absolute -bottom-2 left-1/2 -translate-x-1/2 translate-y-1/3 text-orange-200 rotate-180" size={24} strokeWidth={4} />
+		<Triangle fill="var(--color-orange-300)" class="absolute -bottom-2 left-1/2 -translate-x-1/2 translate-y-1/3 text-orange-200 rotate-180" size={24} strokeWidth={4} />
 
 	</div>
 
@@ -416,16 +415,10 @@
 
 	}
 
-	.reaction-card-emoji-empty,
 	.reaction-card-emoji-note {
 		margin: 0;
 		color: black;
 		font-size: 0.75rem;
-	}
-
-	.reaction-card-emoji-empty {
-		grid-column: 1 / -1;
-		padding: 0.75rem;
 	}
 
 	.reaction-card-emoji-note {
