@@ -47,7 +47,7 @@ type CamoTargetRow = SqlRow & {
 	canonical_url: string;
 	camo_url: string;
 	discovered_at: number;
-	purge_pending: number;
+	purge_pending: number; // Pending generation; increments preserve votes arriving during a purge.
 	next_purge_at: number;
 	last_purge_attempt_at: number;
 	last_purge_status: number;
@@ -429,7 +429,7 @@ export class ReactionDocument extends DurableObject {
 
 			this.ctx.storage.sql.exec(
 				`UPDATE camo_targets
-					SET purge_pending = 1, next_purge_at = ?
+					SET purge_pending = purge_pending + 1, next_purge_at = ?
 					WHERE reaction = ?`,
 				nextPurgeAt,
 				reactionId
@@ -608,7 +608,7 @@ export class ReactionDocument extends DurableObject {
 						camo_url = excluded.camo_url,
 						discovered_at = excluded.discovered_at,
 						purge_pending = CASE
-							WHEN excluded.purge_pending = 1 THEN 1
+							WHEN excluded.purge_pending > 0 THEN camo_targets.purge_pending + excluded.purge_pending
 							ELSE camo_targets.purge_pending
 						END,
 						next_purge_at = CASE
@@ -637,7 +637,7 @@ export class ReactionDocument extends DurableObject {
 			.exec<CamoTargetRow>(
 				`SELECT *
 					FROM camo_targets
-					WHERE purge_pending = 1 AND next_purge_at > 0 AND next_purge_at <= ?
+					WHERE purge_pending > 0 AND next_purge_at > 0 AND next_purge_at <= ?
 					ORDER BY next_purge_at ASC
 					LIMIT ${PURGE_BATCH_LIMIT}`,
 				now
@@ -661,20 +661,35 @@ export class ReactionDocument extends DurableObject {
 		}
 
 		for (const target of batch) {
+			const attemptedAt = Date.now();
+			this.ctx.storage.sql.exec(
+				`UPDATE camo_targets SET last_purge_attempt_at = ?, next_purge_at = ?
+					WHERE reaction = ? AND camo_url = ?`,
+				attemptedAt,
+				attemptedAt + PURGE_MIN_INTERVAL_MS,
+				target.reaction,
+				target.camo_url
+			);
 			const status = await purgeCamoUrl(target.camo_url);
-			const completedAt = Date.now();
+			const retry = status === 0 || status === 408 || status === 429 || status >= 500;
 
 			this.ctx.storage.sql.exec(
 				`UPDATE camo_targets
-					SET purge_pending = 0,
-						next_purge_at = 0,
-						last_purge_attempt_at = ?,
-						last_purge_status = ?
-					WHERE reaction = ?`,
-				completedAt,
+					SET last_purge_status = ?
+					WHERE reaction = ? AND camo_url = ?`,
 				status,
-				target.reaction
+				target.reaction,
+				target.camo_url
 			);
+			if (!retry) {
+				this.ctx.storage.sql.exec(
+					`UPDATE camo_targets SET purge_pending = 0, next_purge_at = 0
+						WHERE reaction = ? AND camo_url = ? AND purge_pending = ?`,
+					target.reaction,
+					target.camo_url,
+					target.purge_pending
+				);
+			}
 		}
 	}
 
@@ -698,7 +713,7 @@ export class ReactionDocument extends DurableObject {
 			this.ctx.storage.sql.exec(
 				`UPDATE camo_targets
 					SET next_purge_at = ?
-					WHERE purge_pending = 1 AND next_purge_at > 0 AND next_purge_at <= ?`,
+					WHERE purge_pending > 0 AND next_purge_at > 0 AND next_purge_at <= ?`,
 				nextWindowAt,
 				now
 			);
@@ -745,7 +760,7 @@ export class ReactionDocument extends DurableObject {
 			.exec<{ next_at: number | null }>(
 				`SELECT MIN(next_purge_at) AS next_at
 					FROM camo_targets
-					WHERE purge_pending = 1 AND next_purge_at > 0`
+					WHERE purge_pending > 0 AND next_purge_at > 0`
 			)
 			.toArray()[0]?.next_at;
 

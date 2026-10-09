@@ -54,6 +54,8 @@ test('creates, protects, badges, and toggles a reaction widget', async ({ reques
 
 	const badgeAfterClick = await request.get(`/badge?doc=${doc}&r=thumbs-up`);
 	expect(await badgeAfterClick.text()).toContain('👍 1');
+	// Camo cached stale counts without an explicit zero TTL, despite no-cache/no-store.
+	expect(badgeAfterClick.headers()['cache-control']).toContain('max-age=0');
 
 	const secondClick = await request.get(`/react?doc=${doc}&r=thumbs-up`, {
 		headers: { cookie: setCookie.split(';')[0] },

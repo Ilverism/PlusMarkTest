@@ -3,7 +3,7 @@ import { getReactionDocumentStub, parseDocAndReaction } from '$lib/server/reacti
 
 const BADGE_HEADERS = {
 	'content-type': 'image/svg+xml; charset=utf-8',
-	'cache-control': 'no-cache, no-store, must-revalidate'
+	'cache-control': 'max-age=0, no-cache, no-store, must-revalidate',
 };
 
 export const GET: RequestHandler = async (event) => {
